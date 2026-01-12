@@ -1,0 +1,28 @@
+---
+title: "Homework-docker"
+output: html_document
+---
+
+```{r}
+library('DESeq2')
+set.seed(123)
+data_mat <- matrix(sample(1:100, replace=TRUE), nrow=5, ncol=10)
+colnames(data_mat) <- c('cond1', 'cond2', 'cond3', 'cond4', 'cond5', 'ctrl1', 
+                        'ctrl2', 'ctrl3', 'ctrl4', 'ctrl5')
+rownames(data_mat) <- c('gene1', 'gene2', 'gene3', 'gene4', 'gene5')
+
+coldata <- data.frame(
+  condition = factor(ifelse(grepl("^cond", colnames(data_mat)), "cond", "ctrl"))
+)
+rownames(coldata) <- colnames(data_mat)
+
+deseq_mat <- DESeqDataSetFromMatrix(
+  countData = data_mat,
+  colData   = coldata,
+  design    = ~ condition
+)
+deseq_results <- DESeq(deseq_mat)
+log2foldchange <- results(deseq_results)["log2FoldChange"]
+
+log2foldchange
+```
