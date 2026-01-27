@@ -17,3 +17,135 @@ In this exercise, you'll retrieve metadata for the following GEO Series and answ
 > Hint: Sample labels are not standardized. Use robust keyword detection (e.g., `control|normal|healthy|wild[- ]?type` vs. `tumou?r|cancer|patient|disease|mutant|treated`). Inspect a few GSM rows if the automatic inference is uncertain.
 
 
+
+## Answers
+### GSE201427
+
+```{r}
+sql <- paste(
+  "SELECT *",
+  "FROM gse",
+  "WHERE gse = 'GSE201427'"
+)
+
+(rs <- dbGetQuery(con, sql))
+
+sql <- paste(
+  "SELECT *",
+  "FROM gse_gsm gg",
+  "JOIN gsm s ON s.gsm = gg.gsm",
+  "WHERE gse = 'GSE201427'"
+)
+
+(rs <- dbGetQuery(con, sql))
+
+sql <- paste(
+  "SELECT gp.gse, gp.gpl, p.title, p.technology, p.organism",
+  "FROM gse_gpl gp",
+  "JOIN gpl p ON p.gpl = gp.gpl",
+  "WHERE gp.gse = 'GSE201427'"
+)
+
+(rs <- dbGetQuery(con, sql))
+```
+
+1. This data was created using Illumina HiSeq 4000 high throughput sequencing. (RNA seq) 
+2. It is studying mutations in cancer through a mouse tumor model and monoallelic deletion of Sf3b1 is the 'disease'.
+3. There are 8 samples, each also associated with Illumina HiSeq 4000 high throughput sequencing. Available is the raw reads on SRA, downloadable as fasta.
+4. 5 control (siCtrl) and 3 disease (siSF2B1).
+
+### GSE166530
+```{r}
+sql <- paste(
+  "SELECT *",
+  "FROM gse",
+  "WHERE gse = 'GSE166530'"
+)
+
+(rs <- dbGetQuery(con, sql))
+
+sql <- paste(
+  "SELECT *",
+  "FROM gse_gsm gg",
+  "JOIN gsm s ON s.gsm = gg.gsm",
+  "WHERE gse = 'GSE166530'"
+)
+
+(rs <- dbGetQuery(con, sql))
+
+```
+
+1. This data was created using Illumina NovaSeq 6000 high throughput sequencing (RNAseq).
+2. It compares SARS-CoV-2 infection vs no infection in human hosts (Indian patients)
+3. There are 29 samples all with Illumina NovaSeq 6000 high throughput sequencing data. Available is the raw reads on SRA, downloadable as fasta. There is also count data from bam in the supplementary file.
+4. There are 5 negative controls and 24 disease.
+
+
+### GSE162183
+```{r}
+sql <- paste(
+  "SELECT *",
+  "FROM gse",
+  "WHERE gse = 'GSE162183'"
+)
+
+(rs <- dbGetQuery(con, sql))
+
+sql <- paste(
+  "SELECT *",
+  "FROM gse_gsm gg",
+  "JOIN gsm s ON s.gsm = gg.gsm",
+  "WHERE gse = 'GSE162183'"
+)
+
+(rs <- dbGetQuery(con, sql))
+
+```
+
+
+1. This data was created using single cell Illumina NovaSeq 6000 high throughput sequencing (scRNA).
+2. It compares human psoriasis skin with healthy skin from human donors.
+3. There are 6 samples all with Illumina NovaSeq 6000 high throughput sequencing data. Available is the raw reads on SRA, downloadable as fasta. 
+4. There are 3 healthy controls and 3 disease.
+
+
+### GSE186458
+```{r}
+sql <- paste(
+  "SELECT *",
+  "FROM gse",
+  "WHERE gse = 'GSE186458'"
+)
+
+(rs <- dbGetQuery(con, sql))
+
+sql <- paste(
+  "SELECT *",
+  "FROM gse_gsm gg",
+  "JOIN gsm s ON s.gsm = gg.gsm",
+  "WHERE gse = 'GSE186458'"
+)
+
+(rs <- dbGetQuery(con, sql))
+
+```
+1. This data was created using DNA methylation profiling by single cell high throughput sequencing.
+2. It analyzes healthy adult tissue samples undergoing surgical procedures.
+3. There are 253 samples all with Illumina NovaSeq 6000 single cell high throughput sequencing data. Available is the raw reads on SRA, downloadable as fasta. 
+4. There are no differentiating healthy/control groups, just different tissues and different donors.
+
+### GSE264108
+
+```{r}
+sql <- paste(
+  "SELECT *",
+  "FROM gse",
+  "WHERE gse = 'GSE264108'"
+)
+
+(rs <- dbGetQuery(con, sql))
+
+dbGetQuery(con, "SELECT * FROM metaInfo")
+```
+
+This is a new dataset, added to the archive last year. I cannot see it from my database query because the database I downloaded was an old version, from March 2024.
