@@ -1,0 +1,113 @@
+id <- data.frame(refId = c("NP1.1", NA, "NP2.4", "NP6"))
+id
+?grep
+grep("\.", id["refId"])
+grep(".", id["refId"])
+grep(".", id["refId"])
+id["refId"]
+id[grep(".", id["refId"])]
+grep(".", id["refId"])
+id <- data.frame(refId = c("NP1.1", NA, "NP2.4", "NP6"),
+ctrl = c(19, 7, 9, 21),
+stim = c(6, 2, 1900, 2000))
+id
+id[grep(".", id["refId"])]
+grep(".", id["refId"])
+?regex
+grep(".", id$refId)
+grep("\.", id$refId)
+grep("\\.", id$refId)
+id[,grep("\\.", id$refId)]
+id[grep("\\.", id$refId),]
+length(grep("\\.", id$refId))
+myIDs <- data.frame(refID = c("NP1.1", NA, "NP2.4", "NP6"),
+ctrl = c(19, 7, 9, 21),
+stim = c(6, 2, 1900, 2000))
+myIDs$stim / myIDs$ctrl
+myIDs$fold_change <- myIDs$stim / myIDs$ctrl
+myIDs$fold_change
+myIDs
+myIDs$stim / myIDs$ctrl > 3
+which(myIDs$stim / myIDs$ctrl > 3)
+which(myIDs$stim / myIDs$ctrl > 3)
+?which
+myIDs$name(which(myIDs$stim / myIDs$ctrl > 3))
+myIDs$name[which(myIDs$stim / myIDs$ctrl > 3)]
+myIDs$name[myIDs$stim / myIDs$ctrl > 3]
+myIDs$stim / myIDs$ctrl > 3
+myIDs <- data.frame(refID = c("NP1.1", NA, "NP2.4", "NP6"),
+name = c("abc", "def", "ghi", "jkl"),
+ctrl = c(19, 7, 9, 21),
+stim = c(6, 2, 1900, 2000))
+myIDs$name[myIDs$stim / myIDs$ctrl > 3]
+columns
+?columns
+??col
+?colnames
+colnames(myIDs)
+p1 <- list(genes=c("h", "i", "j"))
+p1
+p2 <- list(genes=c("g", "d"))
+pathways <- list(p1, p2)
+pathways
+pathways
+lapply(pathways, function(x){length(x$genes)})
+datapath <- data.frame(name = c("a", "b"),
+genes = c(c("a", "b", "c"), c("h", "i")))
+datapath <- data.frame(name = c("a", "b"),
+genes = list(c("a", "b", "c"), c("h", "i")))
+datapath <- data.frame(name = c("a", "b"),
+genes = list(c("a", "b", "c"), c("h", "i", "j")))
+datapath <- data.frame(name = c("a", "b"),
+genes = list(c("a", "b"), c("h", "i")))
+datapath
+unique(unlist(lapply(pathways, function(x){x$source})))
+p1 <- list(genes=c("h", "i", "j"), source="hi")
+p2 <- list(genes=c("g", "d"), source="bye")
+pathways <- list(p1, p2)
+unique(unlist(lapply(pathways, function(x){x$source})))
+p1 <- list(genes=c("h", "i", "j"), source="hi")
+p2 <- list(genes=c("g", "d"), source="hi")
+pathways <- list(p1, p2)
+unique(unlist(lapply(pathways, function(x){x$source})))
+x <- matrix(c(10, 1, 1, 2, 25, 5, 8, 13, 21, 34, 55, 89), ncol=3, byrow=TRUE)
+x
+sum(x[2,])
+x[ ,1] > 10
+x[ , 2]
+?matrix
+x <- matrix(list(10, 1, 1, 2, 25, 5, 8, "c", "d", "e", "f"), ncol=3, byrow=TRUE)
+x
+?data.frame
+datapath <- data.frame(name = c("a", "b"),
+genes = list(1, "f"))
+datapath
+myIDs$name[myIDs$stim / myIDs$ctrl > 3 | myIDs$ctrl / myIDs$stim > 3]
+myIDs$name[abs(leg2(myIDs$stim / myIDs$ctrl))]
+myIDs$name[abs(log2(myIDs$stim / myIDs$ctrl))]
+abs(log2(myIDs$stim / myIDs$ctrl))
+abs(log2(myIDs$stim / myIDs$ctrl)) > 3
+myIDs$name[abs(log2(myIDs$stim / myIDs$ctrl)) > 3]
+?sort
+sort(abs(log2(myIDs$stim / myIDs$ctrl)))
+order(abs(log2(myIDs$stim / myIDs$ctrl)))
+myIDs$name[order(abs(log2(myIDs$stim / myIDs$ctrl)))]
+myIDs[order(abs(log2(myIDs$stim / myIDs$ctrl)))]
+myIDs[,order(abs(log2(myIDs$stim / myIDs$ctrl)))]
+myIDs[order(abs(log2(myIDs$stim / myIDs$ctrl))),]
+length(grep("\\.", myIDs$refID))
+?data.frame
+?read.csv
+getwd()
+setwd("/home/projects")
+?read.csv
+x
+mySeq <- c("ABC12", "13ABC", "ABC14")
+mySeq
+unique(gsub("[0-9]", "", mySeq))
+?data.frame
+?matrix
+is.matrix(x)
+x
+typeof(x)
+savehistory("~/projects/Rbasics_quiz_history.txt")
