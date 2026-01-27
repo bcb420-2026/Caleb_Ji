@@ -1,0 +1,16 @@
+---
+title: "A1_Caleb"
+output: html_document
+author: "Caleb Ji"
+date: "2026-01-27"
+output:
+  html_document:
+    toc: true                   # this is to generate a table of contents
+    toc_depth: 2                # this is to control what level of header we are going to display on the table of contents 
+    toc_float: true             #this is to have a floating table of contents
+    code_folding: hide          # this is to fold/hide the code 
+bibliography: references.bib    
+link-citations: true            
+---
+
+GSE284613

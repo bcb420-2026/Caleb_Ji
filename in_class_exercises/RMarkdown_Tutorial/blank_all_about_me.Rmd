@@ -1,6 +1,6 @@
 ---
 title: "Get to know me!"
-author: "Student's Name"
+author: "Caleb Ji"
 date: "2026-01-27"
 output:
   html_document:
@@ -19,17 +19,18 @@ knitr::opts_chunk$set(echo = FALSE,
                       knitr.kable.max_rows = 6)
 
 # attach any relevant packages
-....
+library(kableExtra)
+library(dplyr)
 
 # read the data files
 courses <- read.csv(file = "courses.csv")
 hobbies <- read.csv(file = "hobbies.csv")
 ```
 
-# This R Markdown is to get to know ...Student's Name...!
+# This R Markdown is to get to know Caleb Ji!
 
 ## Bio {#bachelors-degree}
-... fill in ...
+Hi, My name is Caleb! I'm a fourth year student in UofT.
 
 
 ## Bachelors Degree 
@@ -39,6 +40,9 @@ hobbies <- read.csv(file = "hobbies.csv")
 
 # show a table with all my courses 
 # ... fill in ...
+courses %>%
+  kbl() %>%
+  kable_styling()
 
 ```
 
@@ -48,6 +52,8 @@ hobbies <- read.csv(file = "hobbies.csv")
 ## organize the data for plotting
 # ... fill in ...
 
+
+
 # generate plot 
 # ... fill in ...
   
@@ -55,11 +61,10 @@ hobbies <- read.csv(file = "hobbies.csv")
 
 ## Hobbies
 ### {#my-hobbies}
-... fill in ...
-
+I have hobbies!
 
 ## Custom section {#custom-section}
-... fill in ...
+I am cool!
 
 ## Questions to answer 
 
