@@ -1,3 +1,9 @@
+---
+title: "Exercises"
+params:
+  file_grep: "\\.txt.gz$|\\.tsv.gz$|\\.csv.gz$"
+---
+
 # Exercises
 
 These are intended to be done **after** completing the worked examples.
@@ -11,6 +17,37 @@ Using **GSE119732**, confirm whether the ID column contains Ensembl IDs with ver
 3. Create a new column with versions stripped.
 4. Map the identifiers to HGNC symbols.
 
+```{r}
+library(GEOquery)
+source("./fetch_geo_supp.R")
+strip_ensembl_version <- function(x) sub("\\..*$", "", x)
+curr_gse <- "GSE119732"
+
+fetch_geo_supp(gse = curr_gse)
+path <- file.path("data",curr_gse)
+files <- list.files(path, pattern = params$file_grep, 
+                    full.names = TRUE, recursive = TRUE)
+
+x <- safe_read(files[1])
+(ids <- x[["gene_id"]]) # There are version suffixes on the ensembl ids
+
+first_20 <- head(ids, n=20) # All have versions
+
+x["gene_id_stripped"] <- strip_ensembl_version(ids)
+
+library(biomaRt)
+ensembl_ids <- unique(strip_ensembl_version(ids))
+ensembl <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+map <- getBM(
+  attributes = c("ensembl_gene_id", "hgnc_symbol"),
+  filters = "ensembl_gene_id",
+  values = ensembl_ids,
+  mart = ensembl
+)
+```
+
+
 ## Exercise 2 — https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE122380
 
 Using **GSE122380**, confirm whether the ID column contains Ensembl IDs with version suffixes.
@@ -20,6 +57,38 @@ Using **GSE122380**, confirm whether the ID column contains Ensembl IDs with ver
 3. Map the identifiers to HGNC symbols.
 4. What is different about this file? 
 
+```{r}
+library(GEOquery)
+source("./fetch_geo_supp.R")
+strip_ensembl_version <- function(x) sub("\\..*$", "", x)
+curr_gse <- "GSE122380"
+
+fetch_geo_supp(gse = curr_gse)
+path <- file.path("data",curr_gse)
+files <- list.files(path, pattern = params$file_grep, 
+                    full.names = TRUE, recursive = TRUE)
+
+x <- safe_read(files[1])
+(ids <- x[["Gene_id"]]) 
+
+(first_20 <- head(ids, n=20)) # None have version ids
+
+library(biomaRt)
+ensembl_ids <- unique(ids)
+ensembl <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+map <- getBM(
+  attributes = c("ensembl_gene_id", "hgnc_symbol"),
+  filters = "ensembl_gene_id",
+  values = ensembl_ids,
+  mart = ensembl
+)
+```
+
 ## Exercise 3 - 
  
 Can you use the worked example to process the above two GEO records?  How?
+
+
+YES! I can just change the param at the top of the notebook to the right GEO
+
