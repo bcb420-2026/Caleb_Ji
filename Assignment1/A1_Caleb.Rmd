@@ -13,4 +13,25 @@ bibliography: references.bib
 link-citations: true            
 ---
 
-GSE284613
+
+```{r}
+library(GEOquery)
+source("./fetch_geo_supp.R")
+
+curr_gse <- "GSE253362"
+
+fetch_geo_supp(gse = curr_gse)
+path <- file.path("data",curr_gse)
+files <- list.files(path, pattern = params$file_grep, 
+                    full.names = TRUE, recursive = TRUE)
+
+raw_counts_file <- sub("\\.gz$", "", files[1])
+file.rename(files, raw_counts_file)
+
+x <- readr::read_tsv(raw_counts_file, show_col_types = FALSE)
+
+```
+
+
+
+
