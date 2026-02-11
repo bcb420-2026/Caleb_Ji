@@ -1,37 +1,782 @@
 ---
-title: "A1_Caleb"
-output: html_document
+title: "Assignment 1: Data selection, Normalization, and Differential Expression"
 author: "Caleb Ji"
 date: "2026-01-27"
 output:
   html_document:
-    toc: true                   # this is to generate a table of contents
-    toc_depth: 2                # this is to control what level of header we are going to display on the table of contents 
-    toc_float: true             #this is to have a floating table of contents
-    code_folding: hide          # this is to fold/hide the code 
-bibliography: references.bib    
+    toc: true                   
+    toc_depth: 2                
+    toc_float: true           
+    code_folding: hide          
+bibliography: references.bib  
+nocite: '@*'
+df_print: paged
 link-citations: true            
 ---
 
 
-```{r}
+# 1. Data selection 
+
+## 1.1 Experimental information
+
+I chose the experiment `GSE253362`.
+
+This dataset came from a study testing the effects of mubritinib on Glioblastomas,
+one of the most treatment-resistant cancers [@Burban2025]. In particular, self-renewing brain 
+tumour stem cells (BTSCs) cause a lot of problems for treatment. Finding cancer 
+treatments is a very interesting and complicated subject. This study also tackles
+cancer in the brain, a more difficult area where tissue is sensitive to damage
+and drugs need to pass through the blood-brain barrier. Seeing another potential
+therapeutic drug for this difficult and impactful cancer is always amazing.
+
+They performed a simple RNA-seq analysis on a patient derived BTSC. 
+The control had no modification to the cell line, but the test condition
+exposed the cell to mubritinib. Specifically, they exposed the cell to
+a 24 h treatment with 500 nM of mubritinib.
+
+Overall, there were three samples of each condition: three controls and three 
+mubritinib test conditions for a total of six samples. 
+
+# 2. Cleaning data
+
+## 2.1 Download data from GEO
+```{r, message=FALSE, warning=FALSE}
 library(GEOquery)
-source("./fetch_geo_supp.R")
+library(rmarkdown)
+library(readr)
+library(dplyr)
 
 curr_gse <- "GSE253362"
 
-fetch_geo_supp(gse = curr_gse)
-path <- file.path("data",curr_gse)
-files <- list.files(path, pattern = params$file_grep, 
-                    full.names = TRUE, recursive = TRUE)
+# making sure that I do not download a new file every time I rerun this notebook
+raw_counts_file = "data/GSE253362/GSE253362_rawcounts_mubritinib.tsv"
+if (!file.exists(raw_counts_file)) {
+  source("./fetch_geo_supp.R")
+  GEOquery::fetch_geo_supp(gse = curr_gse)
+  path <- file.path("data",curr_gse)
+  files <- list.files(path, pattern = params$file_grep, 
+                      full.names = TRUE, recursive = TRUE)
+  raw_counts_file <- sub("\\.gz$", "", files[1])
+  # remove the .gz because the data downloaded is not compressed even though it 
+  # pretends to be... Not sure why, probably an error with the data upload on 
+  # the author's end
+  file.rename(files, raw_counts_file)
+}
 
-raw_counts_file <- sub("\\.gz$", "", files[1])
-file.rename(files, raw_counts_file)
-
-x <- readr::read_tsv(raw_counts_file, show_col_types = FALSE)
+raw_counts_data <- readr::read_tsv(raw_counts_file, show_col_types = FALSE)
 
 ```
 
+The data was readily available and downloadable on GEO. I downloaded it as a `tsv`.
+We will need to first explore the data to make sure it is good quality.
 
+## 2.2 Assess preview statistics
+
+
+Concordant with the experimental design, Table 1 has six samples with three controls and three tests. 
+As well, there are `61587` genes. Many of them seem to have no expression in any 
+sample; they will be removed eventually. The dataset identifies expression 
+with ensembl ids with version numbers. We will map these into HUGO (HGNC) gene 
+symbols for legibility and data quality.
+
+```{r}
+# Display the entire dataframe in table format
+raw_counts_display <- raw_counts_data
+colnames(raw_counts_display) <- c("Ensembl ID", "Control 1", "Control 2", "Control 3", 
+              "Mubritinib 1", "Mubritinib 2", "Mubritinib 3")
+rmarkdown::paged_table(raw_counts_display)
+```
+**Table 1.** Raw counts data downloaded from GEO, with sample and condition names.
+
+To explore the variability in the data between samples, we calculate some summary
+statistics. As shown in Table 2, the samples are relatively consistent between each other, meaning no large outliers
+from samples and no large technical differences. The slight differences in library size 
+will be corrected for with normalization.
+
+```{r}
+# Finding some statistics between samples to validate the quality of the data
+lib_sizes <- colSums(raw_counts_data[-1])
+detected_genes <- colSums(raw_counts_data[-1] > 0)
+
+summary_df <- rbind(lib_sizes, detected_genes)
+
+summary_df_display <- summary_df
+colnames(summary_df_display) <- c("Control 1", "Control 2", "Control 3", 
+              "Mubritinib 1", "Mubritinib 2", "Mubritinib 3")
+rmarkdown::paged_table(as.data.frame(summary_df_display))
+```
+**Table 2.** Between sample statistics on library size and number of expressed genes.
+
+
+## 2.3 Map gene symbols to HUGO gene symbols
+```{r, message=FALSE, warning=FALSE}
+library(biomaRt)
+# Function from lecture that strips ensembl version numbers from the id
+strip_ensembl_version <- function(x) sub("\\..*$", "", x)
+
+# Force the underlying data as a vector, not a dataframe.
+ids <- raw_counts_data[["ensembl_id"]]
+ensembl_ids <- unique(strip_ensembl_version(ids))
+raw_counts_data$ensembl_id_trimmed <- strip_ensembl_version(ids)
+
+# Cache gene map so the code is not as reliant on ensembl connection
+cached_map <- "cached_map.rds"
+if (file.exists(cached_map)) {
+  gene_map <- readRDS(cached_map)
+} else {
+  # Pull gene map for all ensembl ids from ensembl homo sapiens dataset
+  ensembl <- biomaRt::useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+  gene_map <- biomaRt::getBM(
+    attributes = c("ensembl_gene_id", "hgnc_symbol"),
+    filters = "ensembl_gene_id",
+    values = ensembl_ids,
+    mart = ensembl
+  )
+  saveRDS(gene_map, cached_map)
+}
+```
+Now we map ensembl ids to HGNC symbols. 
+They are mapped using the ensembl database from the `biomaRt` [@biomart] package.
+From this package, we obtain a mapping table (Table 3), but it is not necessarily one to one, and many ensembl ids
+do not have a corresponding HGNC symbol. These will have to be dealt with.
+
+```{r}
+# display the gene map table
+gene_map_display <- gene_map
+colnames(gene_map_display) <- c("Ensembl ID", "HGNC Symbol")
+rmarkdown::paged_table(gene_map_display)
+```
+**Table 3.** Ensembl id and HGNC symbol mapping table
+
+
+### 2.3.1 Explore unmapped genes
+
+There were many expression values that could not be mapped to HGNC
+symbols as seen in the mapping table. From Table 4, we see `18995` unmapped genes 
+of various types. 
+
+```{r, results='hide'}
+# Get all the unmapped genes
+unmapped_genes = gene_map[gene_map$hgnc_symbol == "",]
+
+# Get the details of all these ensembl ids. Cache the results
+# as to not rely always on ensembl connection
+cached_map <- "cached_ensg_details.rds"
+if (file.exists(cached_map)) {
+  ensg_details <- readRDS(cached_map)
+} else {
+  ensembl <- biomaRt::useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+  ensg_details <- biomaRt::getBM(
+    attributes = c(
+      "ensembl_gene_id",
+      "gene_biotype"
+    ),
+    filters = "ensembl_gene_id",
+    values  = unmapped_genes,
+    mart    = ensembl
+  )
+  saveRDS(ensg_details, cached_map)
+}
+
+
+# display the gene map table
+ensg_details_display <- ensg_details
+colnames(ensg_details_display) <- c("Ensembl ID", "Gene Type")
+rmarkdown::paged_table(ensg_details_display)
+```
+**Table 4.** Unmapped Ensembl ids and their gene type.
+
+As we see in Figure 1, most of the unmapped genes were lncRNAs, pseudogenes, or other 
+transcripts we do not care about. However, some were protein coding genes. These
+genes are interesting and would be nice to have mapped. Hopefully these would be 
+mapped in a later version of ensembl. 
+
+```{r, message=FALSE, warning=FALSE}
+library(ggplot2)
+
+# Aggregating the gene types to get the number of unmapped genes that fall into 
+# each category
+agg_gene_types <- aggregate(
+  ensg_details$ensembl_gene_id,
+  list(ensg_details$gene_biotype),
+  FUN = function(x) length(unique(x))
+)
+# Ordering in descending order
+agg_gene_types <- agg_gene_types[order(agg_gene_types$x),]
+
+# Converting the groups into a factor so that ggplot respects the order
+agg_gene_types$Group.1 <- factor(
+  agg_gene_types$Group.1,
+  levels = agg_gene_types$Group.1
+)
+
+ggplot2::ggplot(agg_gene_types, aes(x = Group.1, y = x, fill = Group.1)) +
+  geom_col(width = 0.6, color = "grey20") +
+  coord_flip() +
+  scale_fill_viridis_d(option = "turbo", guide = "none") +
+  labs(
+    x = NULL, y = "Number of genes",
+    title = "Distribution of Unmapped Gene Types"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title.position = "plot",
+    panel.grid.major.y = element_blank()
+  )
+```
+
+**Figure 1** Number of genes for each type of gene not mapped to an HGNC symbol.
+
+
+Since the assignment desired HUGO symbols 
+for each row, all expression values that did not map to a HGNC symbol are discarded.
+
+```{r}
+# Discard all missing hgnc symbols.
+gene_map <- gene_map[gene_map$hgnc_symbol != "",]
+```
+
+
+### 2.3.2 Explore genes mapped to multiple symbols
+
+Next, we look into all ensembl ids that map to multiple HGNC symbols.
+There was only one gene that mapped to two different HGNC symbols (Table 5). 
+and it was a long intergenic non-coding RNAs (lincRNAs)), I chose to keep the more 
+detailed symbol based on online records, which ended up being `LINC00595`. 
+
+```{r}
+# Get the number of unique hgnc per ensembl
+dup_ensembl <- ave(
+  gene_map$hgnc_symbol,
+  gene_map$ensembl_gene_id,
+  FUN = function(x) length(unique(x))
+)
+
+# subset rows where an Ensembl ID maps to >1 HGNC symbol
+gene_map_multi <- gene_map[dup_ensembl > 1, ]
+
+# Display the duplicate in a table.
+gene_map_multi_display <- gene_map_multi
+colnames(gene_map_multi_display) <- c("Ensembl ID", "HGNC Symbol")
+rownames(gene_map_multi_display) <- NULL
+rmarkdown::paged_table(gene_map_multi_display)
+```
+**Table 5.** Ensembl ids that were mapped to multiple HGNC symbols
+
+
+```{r}
+# Removing LINC00856, I made sure that was the only ensembl id mapped 
+# to LINC00856
+gene_map <- gene_map[gene_map$hgnc_symbol != "LINC00856",]
+```
+
+### 2.3.3 Explore genes mapped to the same variable
+```{r}
+# Get the number of unique ensembl per hgnc
+dup_hgnc <- ave(
+  gene_map$ensembl_gene_id,
+  gene_map$hgnc_symbol,
+  FUN = function(x) length(unique(x))
+)
+
+# subset rows where an HGNC symbol maps to >1 ensembl id
+gene_map_multi <- gene_map[dup_hgnc > 1, ]
+```
+
+Finall, there were expression values that were not unique for specific genes; as in
+multiple Ensembl ids mapped to the same HUGO gene symbols. In Table 6, we see 19 pairs of 
+Ensembl ids that had this property. To figure out what to do with them, I filtered for
+the expression profiles of these genes.
+
+```{r}
+# display the gene map table
+gene_map_multi_display <- gene_map_multi[order(gene_map_multi$hgnc_symbol),]
+colnames(gene_map_multi_display) <- c("Ensembl ID", "HGNC Symbol")
+rownames(gene_map_multi_display) <- NULL
+rmarkdown::paged_table(gene_map_multi_display)
+```
+**Table 6.** Ensembl ids that were mapped to the same HGNC symbol
+
+We see in Table 7, most of the genes had one or zero genes with any expression.
+Only three genes had both, all of which had ensembl represent different splice 
+variants of the same gene. Thus, I additively combined the expression profiles of 
+each gene by hugo symbol assuming that these splice variants are not overlapping 
+in counts.
+
+
+```{r}
+dup_gene_exp <- raw_counts_data %>% dplyr::right_join(gene_map_multi, 
+                              join_by("ensembl_id_trimmed" == 
+                                               "ensembl_gene_id"))
+
+
+dup_gene_exp_display <- dup_gene_exp[-1]
+dup_gene_exp_display <- dup_gene_exp_display[c(7, 8, 1, 2, 3, 4, 5, 6)]
+colnames(dup_gene_exp_display) <- c("Ensembl ID", "HGNC Symbol", "Control 1", 
+                                    "Control 2", "Control 3", "Mubritinib 1", 
+                                    "Mubritinib 2", "Mubritinib 3")
+rmarkdown::paged_table(dup_gene_exp_display)
+```
+**Table 7.** Expression values for ensembl ids that mapped to the same HGNC symbol. 
+
+
+
+
+```{r}
+# Combine the mappings with raw counts
+mapped_counts_data <- raw_counts_data %>% dplyr::left_join(gene_map, 
+                                by = join_by("ensembl_id_trimmed" == 
+                                               "ensembl_gene_id"))
+
+# For all the genes with an hgnc, combine the rows with the same hgnc symbol
+mapped_counts_data <- mapped_counts_data %>% 
+  dplyr::filter(!is.na(hgnc_symbol)) %>% 
+  dplyr::select(-ensembl_id_trimmed, -ensembl_id) %>% 
+  dplyr::group_by(hgnc_symbol) %>% 
+  dplyr::summarise(dplyr::across(where(is.numeric), sum), .groups = "drop")
+```
+
+
+## 2.4 Clean data
+
+The last steps of data processing requires cleaning up the data.
+I first filtered lowly expressed genes: defined such that a gene must have a count
+of at least 10 on at least 1 sample *and* it must have a total count over samples
+of at least 15. There were a total of `15924` genes in the final clean counts.
+
+```{r, message=FALSE, warning=FALSE}
+library(edgeR)
+
+# Reshift gene id column to rownames
+gene_ids <- mapped_counts_data[1]
+mapped_counts_data <- mapped_counts_data[-1]
+rownames(mapped_counts_data) <- gene_ids$hgnc_symbol
+
+groups <- sub("-.$", "", colnames(mapped_counts_data))
+
+# Using DGEList to represent my data
+DGE_data <- edgeR::DGEList(mapped_counts_data, 
+                           group = groups, 
+                           genes = gene_ids$hgnc_symbol)
+
+keep <- edgeR::filterByExpr(DGE_data,
+                            min.count = 10, 
+                            min.total.count = 15)
+DGE_data <- DGE_data[keep, ]
+
+mapped_counts_data_display <- DGE_data$counts
+colnames(mapped_counts_data_display) <- c("Control 1", "Control 2", "Control 3", 
+              "Mubritinib 1", "Mubritinib 2", "Mubritinib 3")
+rmarkdown::paged_table(as.data.frame(mapped_counts_data_display))
+```
+**Table 8.** Final clean raw counts data
+
+There were no clear outliers in the dataset, as such I did not remove any. 
+We will see clearer in the normalization step, but no counts were extreme outliers.
+I also do not believe removing outliers would be beneficial, as it could occlude
+real signal.
+
+# 3. Normalize Data
+
+```{r, message=FALSE, warning=FALSE}
+library(tidyr)
+# Using TMM norm factors from edgeR for normalization
+DGE_data <- edgeR::calcNormFactors(DGE_data, method = "TMM")
+# Normalize on reads using cpm, non logged
+norm_cpm <- edgeR::cpm(DGE_data, log = FALSE, prior.count = 1)
+
+
+# Plotting read density in a box plot, logged to enhance visualization
+plot_box <- function(data, title, ylabel = "log2(counts+1)") {
+   df <- as.data.frame(data) %>%
+    dplyr::mutate(gene = rownames(data)) %>%
+    tidyr::pivot_longer(-gene, names_to = "sample", values_to = "value") %>% 
+    dplyr::mutate(value = log2(value + 1))
+
+  ggplot2::ggplot(df, aes(x = sample, y = value)) +
+    ggplot2::geom_boxplot(outlier.size = 0.2) +
+    ggplot2::theme_bw() +
+    ggplot2::theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+    ggplot2::labs(title = title, x = "Sample", y = ylabel)
+}
+
+# Plotting read density in a density plot, logged to enhance visualization
+plot_density <- function(data, title, xlabel = "log2(counts+1)") {
+   df <- as.data.frame(data) %>%
+    dplyr::mutate(gene = rownames(data)) %>%
+    pivot_longer(-gene, names_to = "sample", values_to = "value") %>% 
+    dplyr::mutate(value = log2(value + 1))
+
+  ggplot2::ggplot(df, aes(x = value, color = sample)) +
+    ggplot2::geom_density() +
+    ggplot2::theme_bw() +
+    ggplot2::labs(title = title, x = xlabel, y = "Density") +
+    ggplot2::guides(colour = "none")
+}
+```
+
+Normalization is important to make sure that the expression values we are comparing
+do not contain any technical variation that may skew the results. I chose to normalize 
+based on `edgeR`'s TMM (Trimmed Mean of M-values) normalization, which calculates 
+CPM not based off of just the 
+raw library size, but a trimmed library size. This helps to make the normalization
+not skewed by genes with large counts, especially since I did not trim outliers.
+
+
+EdgeR's TMM ormalization makes the 25th-75th quantile much more
+consistent between samples (Figures 2, 4) and emphasizes the differences between lowly 
+expressed genes and highly expressed genes (Figures 3, 5), showing a clearer biological signal. 
+
+```{r}
+# Plot the boxplot for unnormalized data
+plot_box(DGE_data$counts, "Log counts quartile density")
+```
+
+**Figure 2** Box plot quartile density of unnormalized counts per sample. Counts 
+logged to improve visualization
+
+
+```{r}
+# Plot the density plot for unnormalized data
+plot_density(DGE_data$counts, "Log counts density")
+```
+
+**Figure 3** Line density plot of unnormalized counts per sample. Counts 
+logged to improve visualization
+
+
+```{r}
+# Plot the boxplot for TMM normalized data
+plot_box(norm_cpm, title = "Log cpm counts quartile density", 
+         ylabel = "log2(cpm counts+1)")
+```
+
+**Figure 4** Box plot quartile density of TMM normalized counts per sample. Counts 
+logged to improve visualization
+
+
+```{r}
+# Plot the density plot for TMM normalized data
+plot_density(norm_cpm, title = "Log cpm counts density", 
+             xlabel = "log2(cpm counts+1)")
+```
+
+**Figure 5** Line density plot of TMM normalized counts per sample. Counts 
+logged to improve visualization
+
+To make visualize the clustering of our samples, we plot a Multidimensional Scaling (MDS) plot
+(Figure 6). We can see a clear clustering within the two conditions, validating
+the experimental design. 
+
+```{r, message=FALSE, warning=FALSE}
+library(RColorBrewer)
+library(limma)
+# Create an mds plot to visualize the sample clustering
+colors <- RColorBrewer::brewer.pal(n = length(unique(DGE_data$samples$group)), "Set1")
+limma::plotMDS(
+  DGE_data,
+  col = colors[DGE_data$samples$group],
+  main = "Log2 Normalized CPM MDS plot "
+)
+legend("topright",
+  legend = unique(DGE_data$samples$group),
+  col = colors,
+  pch = 16,
+  bty = "n"
+)
+```
+
+**Figure 6** The Multidimensional Scaling (MDS) plot for all 6 samples and their
+conditions.
+
+
+```{r}
+# Save final raw counts data and normalized counts data as specified in the assignment
+saveRDS(as.data.frame(DGE_data$counts), "filtered_counts_data.rds")
+saveRDS(as.data.frame(norm_cpm), "filtered_normalized_counts_data.rds")
+```
+
+
+# 4. Differential Expression
+
+Now it is time to do differential expression! I will continue to use `edgeR`'s 
+pipeline with `edgeR::glmQLFit`. The model design is used already defined by the 
+`DGEList`'s group assignment. Since the experimental design is very clear,
+defining the factors is quite easy, as it is just the control vs mubritinib treatment.
+
+To do final quality checks on the data, we look at the Biological Coefficient of Variation (BCV).
+Figure 7 shows that the data is clean and the experiment was well designed. The 
+initial vairation is within moderate levels and it properly decreases as log CPM increases. 
+This gives us confidence in the data quality again.
+
+```{r, message=FALSE, warning=FALSE}
+# Create the dispersions and fit
+# Design is specified by the group in DGE_data
+disp <- edgeR::estimateDisp(DGE_data)
+fit <- edgeR::glmQLFit(disp)
+qlf <- edgeR::glmQLFTest(fit)
+
+# Plotting the BCV
+edgeR::plotBCV(disp, main = "Biological Coefficient of Variation")
+```
+
+**Figure 7** The Biological Coefficient of Variation (BCV) plot of the experimental data.
+
+
+After performing QLF diffferential expression, the top genes were sorted on the False Discover Rate (FDR; Table 9).
+FDR is used to make sure that the p-values are corrected for how many tests we are doing. 
+For example, since there are thousands of genes, it is likely that by chance some of
+them will be significant.
+Since `edgeR` calculates FDR automatically, I use that method for adjusting the p-value.
+Ultimately, `5160` genes pass the FDR threshold of `FDR < 0.05`. 
+
+
+```{r, message=FALSE, warning=FALSE}
+qlf_table <- edgeR::topTags(qlf, n = Inf)$table 
+pass_fdr_df <- qlf_table %>%
+  mutate(sig = FDR < 0.05)
+
+# Top differential genes displayed
+qlf_display <- pass_fdr_df %>% dplyr::filter(sig == TRUE) %>% dplyr::select(-sig)
+colnames(qlf_display) <- c("HGNC Symbol", "Log FC", "Log CPM", "F", 
+              "P Value", "FDR")
+rownames(qlf_display) <- NULL
+rmarkdown::paged_table(qlf_display)
+```
+**Table 9.** Significantly differentially expressed genes sorted based on False Discovery Rate (FDR).
+
+Taking a closer look at the differentially expressed genes (Figure 8), we see that
+many of the genes that are significantly differentiated are oncogenes 
+(GFRA2, RRM2, PDGFRA)
+or tumor suppressors (UNC5B, ESRP1).
+Some oncogenes were actually up-regulated (KLHDC7B, HSPA9).
+Other genes were heavily related to neuron growth (UNC5B, VGF).
+
+
+```{r, message=FALSE, warning=FALSE}
+library(ggrepel)
+# Find genes to highlight, top 5 differentially expressed genes by FDR
+# and top 5 differentially expressed genes by log FC.
+genes_to_label <- c(head(pass_fdr_df, 5)[["genes"]], 
+                    head(pass_fdr_df[order(pass_fdr_df$logFC, 
+                                           decreasing=TRUE), ], 3)[["genes"]],
+                    head(pass_fdr_df[order(pass_fdr_df$logFC, 
+                                           decreasing=FALSE), ], 2)[["genes"]])
+
+
+# Set up the volcano plot data
+volcano_table <- pass_fdr_df %>% dplyr::mutate(
+  direction = case_when(
+      FDR < 0.05 & logFC > 1 ~ "Up",
+      FDR < 0.05 & logFC < -1 ~ "Down",
+      TRUE ~ "Not sig"
+    ),
+  label = if_else(genes %in% genes_to_label, genes, NA)
+)
+
+ggplot2::ggplot(volcano_table, aes(x = logFC, y = -log10(FDR))) +
+  ggplot2::geom_point(aes(color = direction), alpha = 0.7, size = 1.2) +
+  ggrepel::geom_text_repel(
+    aes(label = label),
+    na.rm = TRUE,
+    max.overlaps = Inf,
+    box.padding = 0.3,
+    point.padding = 0.2,
+    min.segment.length = 0
+  ) +
+  ggplot2::scale_color_manual(values = c(
+    "Up" = "red",
+    "Down" = "blue",
+    "Not sig" = "grey70"
+  )) +
+  ggplot2::geom_vline(xintercept = c(-1, 1), linetype = "dashed", color = "steelblue") +
+  ggplot2::geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "steelblue") +
+  ggplot2::theme_minimal() +
+  ggplot2::labs(
+    title = "edgeR: MUB vs NT",
+    x = "log2 fold-change",
+    y = "-log10(FDR)"
+  )
+```
+
+**Figure 8** EdgeR volcano plot of differentially expressed genes between control and 
+    mubritinib conditions, significance requires FDR < 0.05 and an absolute log fold change > 1.
+    Genes of interest were labeled.
+
+Finally, we explore the heatmap of the expression values to find patterns and clusters
+between genes and samples. In Figure 9, we can see clear trends of upregularion and downregulation among the genes. 
+The samples also cluster clearly together, providing more evidence to the well-made
+experimental design. 
+
+
+```{r}
+# Filter for the genes with low FDR
+log_cpm <- edgeR::cpm(DGE_data, log = TRUE, prior.count = 1)
+keep <- pass_fdr_df$genes %in% rownames(log_cpm)
+
+# Prep the data for a heat map
+hm_mat <- log_cpm[pass_fdr_df$genes[keep], , drop = FALSE]
+hm_labels <- pass_fdr_df$genes[keep]
+
+# Making sure no labels repeat (HGNC symbols can repeat sometimes)
+rownames(hm_mat) <- make.unique(hm_labels)
+
+# Use the z-score in order to make the data symmetrical and easy to read.
+hm_z <- t(scale(t(hm_mat)))
+
+```
+
+```{r, message=FALSE, warning=FALSE}
+library(ComplexHeatmap)
+
+# Formatting the data for the heatmap
+treatment_data <- as.factor(DGE_data$samples$group)
+treat_levels <- levels(treatment_data)
+treat_cols <- setNames(
+  RColorBrewer::brewer.pal(max(2, length(treat_levels)), "Set2")[seq_along(treat_levels)],
+  treat_levels
+)
+
+# Creating the complex heatmap annotation data
+annot <- ComplexHeatmap::HeatmapAnnotation(
+  treatment = treatment_data,
+  col = list(
+    treatment = treat_cols
+  ),
+  annotation_legend_param = list(
+    treatment = list(title = "Treatment")
+  )
+)
+
+color_function <- circlize::colorRamp2(c(-2, 0, 2), c("blue", "white", "red"))
+
+ComplexHeatmap::Heatmap(
+  hm_z,
+  col = color_function,
+  top_annotation = annot,
+  show_row_names = FALSE,
+  show_column_names = FALSE,
+  cluster_rows = TRUE,
+  cluster_columns = TRUE,
+  row_title = paste0("All significant genes (edgeR: Mub vs Ctrl)"),
+  column_title = "Samples"
+)
+```
+
+**Figure 9** Heatmap of all signficantly differentiated genes, similarity clustered. They are 
+  separated based on sample, each sample is labeled by treatment (control or mubritinib).
+  
+Focusing on the top 20 genes allows us to make clearer interpretations (Figure 10).
+These genes are very clearly differentially expressed, with homogenous results among samples
+of the same treatment.  
+
+```{r}
+# Displaying the top 20 differentially expressed genes to have a clearer picture
+ComplexHeatmap::Heatmap(
+  hm_z[1:20,],
+  col = color_function,
+  top_annotation = annot,
+  show_row_names = TRUE,
+  show_column_names = FALSE,
+  cluster_rows = TRUE,
+  cluster_columns = TRUE,
+  row_title = paste0("Top ", 20, " genes (edgeR: Mub vs Ctrl)"),
+  column_title = "Samples"
+)
+
+```
+
+**Figure 10** Heatmap of the top 20 differentiated genes based on FDR, similarity clustered. They are 
+  separated based on sample, each sample is labeled by treatment (control or mubritinib).
+
+
+
+# 5. Conclusion
+
+Overall, this dataset is well-designed and is able to create a clear narrative of
+differential expression among treatments. The results indicate clearly the 
+brain cancer origin, as the highest differentially expressed genes were mostly
+related to cancer or the brain. However, the clarity of if this treatment is 
+improving the cancer is not yet clear. Some oncogenes are downregulated, but
+some oncogenes are upregulated. Perhaps closer analysis on gene set enrichment 
+can elucidate larger scale patterns in the data, and provide a better story
+on the effects that mubritinib has on self-renewing brain 
+tumour stem cells.
+
+
+
+
+# 6. Questions
+
+### Why is the dataset of interest to you?
+
+This dataset came from a study testing the effects of mubritinib on Glioblastomas,
+one of the most treatment-resistant cancers. In particular, self-renewing brain 
+tumour stem cells (BTSCs) cause a lot of problems for treatment. Finding cancer 
+treatments is a very interesting and complicated subject. This study also tackles
+cancer in the brain, a more difficult area where tissue is sensitive to damage
+and drugs need to pass through the blood-brain barrier. Seeing another potential
+therapeutic drug for this difficult and impactful cancer is always amazing. 
+Ultimately, the nature of the study in brain cancer and its role in proposing a 
+new drug is what makes this dataset interesting to me.
+
+
+### What are the control and test conditions of the dataset?
+
+They performed a simple RNA-seq analysis on a patient derived BTSC. 
+The control had no modification to the cell line, but the test condition
+exposed the cell to mubritinib. Specifically, they exposed the cell to
+a 24 h treatment with 500 nM of mubritinib.
+
+### How many samples in each of the conditions of your dataset?
+
+There were three samples of each condition: three controls and three 
+mubritinib tests.
+
+### Were there expression values that were not unique for specific genes? How did you handle these?
+
+Yes, there were expression values that were not unique for specific genes, as in
+multiple ensembl ids mapped to the same HUGO gene symbols. Here, I explored the 
+expression profiles of each. Most had one or zero genes with any expression.
+Only three genes had both, all of which had ensembl represent different splice 
+variants of the same gene. Thus, I additively combined the expression profiles of 
+each gene by hugo symbol.
+
+If there were multiple Hugo symbols for a single ensembl (there was only one,
+and it was a long intergenic non-coding RNAs (lincRNAs)), I chose the more 
+detailed symbol after some research. 
+
+### Were there expression values that could not be mapped to current HUGO symbols?
+
+Yes, there were many expression values that could not be mapped to HUGO
+symbols. Most were lincRNAs, pseudogenes, or other transcripts we do not
+care about. However, some were protein coding genes that would be nice to have. 
+Since the assignment desired HUGO symbols for each row, I discareded all expression
+values that did not map to a HUGO symbol.
+
+### Were there any outliers in your dataset? How were they handled in the originating paper? How many outliers were removed?
+
+There were no clear outliers in the dataset, gene-wise or sample-wise. 
+All of them had expression values in reasonable ranges. 
+No outliers were removed in the original paper.
+All I did was filter out lowly expressed genes.
+
+### How did you handle replicates?
+
+There were six samples, three controls and three test. Since it was a very simple
+experimental design, I separated these cleanly to be Control vs Mubritinib. There were no 
+outlier samples to remove.
+
+### What is the final coverage of your dataset?
+
+At first, there were `61587`genes. Then, `18995` did not have a HUGO gene symbol. 
+`38` genes mapped to duplicate HUGO symbols in a pairwise fashion. Then, thousands
+of genes were removed for being lowly expressed. This finally leaves `15924` 
+total genes in the final dataset.
+
+### Link to journal
+[https://github.com/bcb420-2026/Caleb_Ji/wiki/Assignment-1-%E2%80%90-Data-set-selection,-clean-and-scoring](Link to journal)
+
+# 7. References
 
 
