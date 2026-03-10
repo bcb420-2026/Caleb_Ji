@@ -385,6 +385,9 @@ DGE_data <- edgeR::calcNormFactors(DGE_data, method = "TMM")
 # Normalize on reads using cpm, non logged
 norm_cpm <- edgeR::cpm(DGE_data, log = FALSE, prior.count = 1)
 
+# Write this for later
+write.table(norm_cpm, file="data/normalized_rnaseq.txt", sep="\t")
+
 
 # Plotting read density in a box plot, logged to enhance visualization
 plot_box <- function(data, title, ylabel = "log2(counts+1)") {

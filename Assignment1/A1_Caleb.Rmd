@@ -51,8 +51,9 @@ curr_gse <- "GSE253362"
 # making sure that I do not download a new file every time I rerun this notebook
 raw_counts_file = "data/GSE253362/GSE253362_rawcounts_mubritinib.tsv"
 if (!file.exists(raw_counts_file)) {
-  source("./fetch_geo_supp.R")
-  GEOquery::fetch_geo_supp(gse = curr_gse)
+  dir.create("data", showWarnings = FALSE, recursive = TRUE)
+  GEOquery::getGEOSuppFiles(GEO = curr_gse, baseDir = "data", makeDirectory = TRUE)
+  invisible(file.path("data", curr_gse))
   path <- file.path("data",curr_gse)
   files <- list.files(path, pattern = params$file_grep, 
                       full.names = TRUE, recursive = TRUE)
@@ -384,6 +385,9 @@ library(tidyr)
 DGE_data <- edgeR::calcNormFactors(DGE_data, method = "TMM")
 # Normalize on reads using cpm, non logged
 norm_cpm <- edgeR::cpm(DGE_data, log = FALSE, prior.count = 1)
+
+# Write this for later
+write.table(norm_cpm, file="data/normalized_rnaseq.txt", sep="\t")
 
 
 # Plotting read density in a box plot, logged to enhance visualization

@@ -94,7 +94,7 @@ if (any(grepl("^ENSG", strip_ensembl_version(ids)))) {
   library(biomaRt)
   ensembl_ids <- unique(strip_ensembl_version(ids))
   ensembl <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
-
+  
   map <- getBM(
     attributes = c("ensembl_gene_id", "hgnc_symbol"),
     filters = "ensembl_gene_id",
