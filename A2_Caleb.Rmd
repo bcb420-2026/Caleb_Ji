@@ -8,7 +8,7 @@ output:
     toc_depth: 2                
     toc_float: true           
     code_folding: hide          
-bibliography: references.bib  
+bibliography: references_2.bib  
 nocite: '@*'
 df_print: paged
 link-citations: true            
@@ -161,6 +161,8 @@ display_table <- function(dataframe, colnames) {
   rmarkdown::paged_table(copy_dataframe)
 }
 
+
+
 ```
 
 # 1. Introduction 
@@ -187,7 +189,7 @@ FDR); `2510` genes were upregulated and `2650` genes were downregulated
 
 Thresholded over-representation analysis (ORA) was performed using g:profiler.
 
-G:profiler is a web system developed by the ELIXIR Estonia research institute.
+G:profiler [@Kolberg2023-bl] is a web system developed by the ELIXIR Estonia research institute.
 Published in 2007, the original paper has 1750 citations. Its subsequent updates 
 in 2019 and 2023 has 5663 and 1470 citations respectively. This tool is widely
 used in research and therefore a capable system to analyze my gene sets.
@@ -197,7 +199,7 @@ Ultimately, these all make g:profiler the method of choice for thresholded
 over-representation analysis (ORA). 
 
 I used g:profiler web last updated on Jun 15, 2025 and the `gprofiler2` R package
-version `0.2.4`.
+version `0.2.4` [@gprofiler2].
 
 
 I ran g:profiler with three main datasets:
@@ -557,7 +559,7 @@ of only down-regulated genes using g:profiler.
 Gene sets were thresholded to be between 5 - 350 (inclusive) genes.
 
 
-# 2.4 Interpretation
+## 2.4 Interpretation
 
 Overall, we see a clear divide between the up-regulated gene set, down-regulated
 gene set, and the combination of the both. The combination has a lot of signal into
@@ -602,16 +604,16 @@ res_p27 <- REAC_res_down[reac_related_p27, ]
 ```
 
 
-
+### TODO WRITE PUBLICATED EVIDENCE FOR WHAT IS GOING ON
 
 # 3. Non-thresholded Gene Set Enrichment Analysis (GSEA)
 
 Thresholded gene set analysis provided a lot of insight, but signal could have 
 been lost through the removal of gene that are not significantly differentially
-expressed. Some effects may not be seen in large changes but many small changes.
+expressed. Some drug effects may not be seen in large changes but many small changes.
 
-I perform non-thresholded GSEA with `fgsea`, a fast GSEA alternative that is
-run entirely in R. I chose this because it closely models after the original GSEA,
+I perform non-thresholded GSEA with `fgsea` [@fgsea], a fast GSEA alternative that is
+run entirely in R. I chose this because it closely models after the original GSEA[@Subramanian2005-vw],
 providing the data necessary to create plots on the leading edge. The original
 GSEA is an industry standard, cited `57039` times. However,
 `fgsea` is much faster and much easier to use as it is not in a separate java 
@@ -645,6 +647,20 @@ with these parameters:
 library(fgsea)
 library(ggplot2)
 library(GSA)
+
+# Plot fgsea function
+plot_fgsea <- function(name, title, pathways_data, fgsea_format_ranks, gsea_res,
+                       y_val) {
+  fgsea::plotEnrichment(pathways_data[[name]],
+               fgsea_format_ranks) + ggplot2::labs(title=title) + 
+  annotate("text", 
+           x = 0, # Left side
+           y = y_val, # Bottom (adjust based on ES range)
+           label = paste0("NES: ", round(gsea_res[pathway==name]$NES, 2), "\n", "FDR: ", 
+                          formatC(gsea_res[pathway==name]$padj, format = "e", digits = 2)),
+           hjust = 0, vjust = 0, size = 4)
+}
+
 # Run fgsea with pathway and ranks
 bader_gmt_file_path <- "data/Human_GOBP_AllPathways_noPFOCR_no_GO_iea_September_01_2025_symbol.gmt"
 pathways_data <- fgsea::gmtPathways(bader_gmt_file_path)
@@ -672,7 +688,6 @@ write_delim(gsea_res[order(gsea_res$pval)] %>% filter(NES < 0),
             delim="\t",
             file="data/gsea_report_neg.tsv")
 ```
-
 
 #### Top Pathway Enrichment Scores
 ```{r, message=FALSE, warning=FALSE}
@@ -709,6 +724,21 @@ lowest p-value. Their pathway names, normalized enrichment score (NES), pvalues,
 and adjusted pvalues (FDR correction) are shown. Gene ranks shows a condensed enrichment
 plot that shows what genes contributed to the pathway enrichment.
 
+
+The top ten up-regulated and down-regulated gene sets hold very clear patterns. 
+Seven of the top ten gene sets that were upregulated were related to protein synthesis. Obviously,
+these are all gene sets that are closely related, and one being enriched causes many of the others
+to be enriched as well. However, we also see amino acid deficiency and starvation pathways, 
+a related, but different idea.
+
+The down-regulated genes continue to have a lot to do with the cell cycle. Mitosis,
+cell cycle checkpoints, and DNA replication are all among the top ten. The most 
+enriched set with a negative NES related to E2F targets, however, E2F is a clear 
+actor in cell cycle, integrating cell cycle progression with DNA repair [@Ren2002-ts].
+
+
+
+
 ```{r, message=FALSE, warning=FALSE}
 fgsea::plotEnrichment(pathways_data[["HALLMARK_E2F_TARGETS%MSIGDBHALLMARK%HALLMARK_E2F_TARGETS"]],
                fgsea_format_ranks) + ggplot2::labs(title="E2F Targets Gene Set Enrichment")
@@ -733,20 +763,63 @@ represents a gene in the gene set
 and the rank which it is differentially expressed. 
 
 
+Interestingly, the difference between thresholded and non-thresholded gene set analysis
+does not hold too many differences. Qualitatively, the lowest p-value for up-regulated 
+gene sets from thresholded ORA was ~8.50e-12 and the lowest p-value for the down-regulated
+gene sets was 4.96e-53. This compares closely with that of fGSEA (6.1e-14, 9.4e-46 respectively).
+This displays the fact that mubritinib has clearer and stronger down-regulatory effects on the cell. 
+Both analyses come to this conclusion.
+
+Therefore, in terms of the down-regulated pathways and gene sets, these two analyses
+come to very similar conclusions. Cell cycle is being down-regulated. Mitosis, cell checkpoints, 
+DNA replication, etc. In both analyses, 10/10 of the top enriched pathways related 
+to the cell cycle (in ORA, we are looking at Reactome pathways). 
+
+The simplicity slightly deviates when looking at up-regulation. There is less clear
+of a signal on what is being up-regulated, and it shows. This is where the differences 
+in the analysis can shine. Since ORA only had 300 genes to work with, not as much depth
+of information could be processed. As we see in the gene ranks of the up-regulated 
+pathways (**Figure 1**), the genes in the leading edge are not as clustered to the front.
+These genes are what ORA would not pick up on. As a result, we see a whole class of 
+protein synthesis pathways being enriched for in fGSEA, that ORA did not pick up on.
+
+Despite this, we still see similar themes, of proteins synthesis, amino acids, and related 
+pathways. 
+
+I think this analysis is unique because of the clear biological signal. ORA loses
+information relative to GSEA, but the signal is still strong enough to provide clear results. 
+Ultimately, a less biologically clear RNA-seq dataset might find more differences between the two.
+
+
+
 ## 3.2 Exploration of Gene Set Enrichments Using Cytoscape
 
-Cytoscape is used to further explore the gene set enrichments, to see if 
+Cytoscape is used to further explore the gene set enrichments, to see if larger scale
+patterns can be elucidated from the visualizations.
+
+The fgsea data was imported into the Cytoscape app [Shannon2003-su]. There were
+666 nodes and 5350 edges, with a node cutoff of 0.005 Q-value and a  0.375 edge similarity cutoff. 
+**Figure 3** shows the network before annotation and manual layout.
 
 #### Raw Enrichment Map Representation
-![Raw Enrichment Map Representation](figures/original_network.png)
+![](figures/original_network.png)
 
 **Figure 3.** Raw enrichment map network created from Cytoscape, nodes are 
 pathways and each edge represents a significant amount of genes that are shared between the gene sets.
 They are clustered and organized by cluster size. 
 
 
+The network was then annotated using AutoAnnotate [@Kucera2016-qx], with quick start
+parameters of a central amount of clusters, labels from the pathways descriptions, and no 
+layout to minimize cluster overlap. Nodes were colored based on -log(pval) * sign(NES). 
+Since the p-values were so skewed towards negative NES, more color weight was given to
+values below zero so the differences could be easily spotted. 
+**Figure 4** shows this annotated network, and as expected most of the networks are
+blue (down-regulated) and related to each other, presumably to do with the cell cycle.
+
+
 #### Curated and Annotated Enrichment Map Representation
-![Curated and Annotated Enrichment Map Representation](figures/curated_network.png)
+![](figures/curated_network.png)
 
 **Figure 4.** Annotated and curated enrichment map network from Cytoscape. Each 
 cluster is labeled and encapsulated with an ellipse. Node colors are based on
@@ -754,10 +827,115 @@ cluster is labeled and encapsulated with an ellipse. Node colors are based on
 pathways and red nodes are significantly up-regulated pathways.
 
 
-![Network themes](figures/network_themes.png)
-**Figure 5.** 
+To explore how these clusters relate to each other, a condensed theme network was 
+created (**Figure 5**). The main focus is on the nodes that are connected. As
+evident in the figure, a lot of down-regulated gene set clusters ar econnected in one big network,
+and these all have to do with the cell cycle! This confirms that the trends we saw
+in the top pathways propogate throughout all enriched pathways.
+Interestingly, three up-regulated gene set clusters
+were connected: hormone stimulus, interleukin-6/4 pathway, and focal adhesion. These are
+related to growth / metabolism / extracellular matrix respectively. 
+
+![](figures/network_themes.png)
+**Figure 5.** Theme network analysis, the clusters from AutoAnnotate are condensed
+into nodes, and connections are representing connections between gene sets in the cluster. 
+Node color is still representing -log(pval) * sign(NES), just aggregated on a cluster scale.
+
 
 # 4. Interpretation of results
+
+There are three main interesting points:
+
+1. ORA and GSEA have deceptively similar results
+
+2. Cell cycle elements are clearly (really strikingly clear) being down-regulated by mubritinib
+
+3. Up-regulated elements are less clearly connected.
+
+
+First, ORA and GSEA have similar results. This is mainly driven by the fact that 
+there is such a clear action that mubritinib has against the cell cycle, that even thresholded
+analyses can't avoid the obvious. 
+
+One thing that GSEA can do that ORA cannot is validate the results of the paper. 
+They used GSEA figures in their paper (**Figure 6**). Comparing panel A in 
+**Figure 6** with **Figure 7**, panel C with **Figure 8**, and panel D with **Figure 9**,
+we see many small differences in the direct trajectory, the NES and the pvalue,
+but the general idea is the same. There is a clear and significant down-regulation
+that is replicated from the paper.
+
+![](figures/paper_gsea.png)
+
+**Figure 6** The GSEA results from [@Burban2025], with the three main pathways that connect to the
+AMPK/p27 pathway that the authors discovered being down-regulated. This was their main evidence to 
+suggest mubritinib's involvement in this pathway.
+
+```{r, warning=FALSE, message=FALSE}
+plot_fgsea("CYCLIN D ASSOCIATED EVENTS IN G1%REACTOME%R-HSA-69231.11", 
+           "Cyclin D associated events in G1",
+           pathways_data,
+           fgsea_format_ranks,
+           gsea_res,
+           y_val=-0.5)
+```
+
+**Figure 7** The GSEA enrichment plot for Cyclin D associated events in G1. The green line represents the cumulative
+enrichment score, peaking at the dotted red line, which is  the
+minimum enrichment score reached by the leading edge. Each black line on the x-axis
+represents a gene in the gene set 
+and the rank which it is differentially expressed. Since this is down-regulated, the 
+enrichment scores are negative. 
+
+
+```{r, warning=FALSE, message=FALSE}
+plot_fgsea("SCF(SKP2)-MEDIATED DEGRADATION OF P27 P21%REACTOME%R-HSA-187577.5", 
+           "SCF SKP2-mediated degradation of p27/p21",
+           pathways_data,
+           fgsea_format_ranks,
+           gsea_res,
+           y_val=-0.4)
+```
+
+**Figure 8** The GSEA enrichment plot for SCF SKP2-mediated degradation of p27/p21. The green line represents the cumulative
+enrichment score, peaking at the dotted red line, which is  the
+minimum enrichment score reached by the leading edge. Each black line on the x-axis
+represents a gene in the gene set 
+and the rank which it is differentially expressed. Since this is down-regulated, the 
+enrichment scores are negative. 
+
+
+
+```{r, warning=FALSE, message=FALSE}
+plot_fgsea("E2F MEDIATED REGULATION OF DNA REPLICATION%REACTOME DATABASE ID RELEASE 93%113510", 
+           "E2F Mediated regulation of DNA replication",
+           pathways_data,
+           fgsea_format_ranks,
+           gsea_res,
+           y_val=-0.6)
+```
+
+**Figure 9** The GSEA enrichment plot for E2F Mediated regulation of DNA replication. The green line represents the cumulative
+enrichment score, peaking at the dotted red line, which is  the
+minimum enrichment score reached by the leading edge. Each black line on the x-axis
+represents a gene in the gene set 
+and the rank which it is differentially expressed. Since this is down-regulated, the 
+enrichment scores are negative. 
+
+Second of all, the cell cycle is clearly being disrupted here. It is clear in the literature
+[@Shapiro1999-jg] that effective anti-cancer drugs target the cell cycle. Tumors are
+characterized by their increased rate of replication, reducing this disrupts the cancer's
+effectiveness and growth. Mubritinib is another example of this, a drug that inhibits
+the AMPK/p27 pathway, down-regulating the cell cycle, and controlling aggressive
+cancers. 
+
+However, third of all is understanding what is going on with the up-regulation.
+The main insight is that these are not actual mechanisms of mubritinib, but rather side
+effects of its main function which is downregulating the cell cycle. Since a cell is no
+longer working to divide, it instead focuses on metabolic activity and providing proteins necessary for growth.
+Papers show that AMPK regulates metabolic programs [@Hardie2012-xx]. As well, translation
+pathways may be increased because of disruption to the cell state (drug treatment), and 
+is a response to the increase in stress [@Mahe2024-xq].
+
 
 
 # 5. Questions
@@ -845,17 +1023,124 @@ affects the AMPK/p27 pathway.
 
 #### Can you find evidence, i.e. publications, to support some of the results that you see. How does this evidence support your results.
 
+Second of all, the cell cycle is clearly being disrupted here. It is clear in the literature
+[@Shapiro1999-jg] that effective anti-cancer drugs target the cell cycle. Tumors are
+characterized by their increased rate of replication, reducing this disrupts the cancer's
+effectiveness and growth. Mubritinib is another example of this, a drug that inhibits
+the AMPK/p27 pathway, down-regulating the cell cycle, and controlling aggressive
+cancers. 
+
+However, third of all is understanding what is going on with the up-regulation.
+The main insight is that these are not actual mechanisms of mubritinib, but rather side
+effects of its main function which is downregulating the cell cycle. Since a cell is no
+longer working to divide, it instead focuses on metabolic activity and providing proteins necessary for growth.
+Papers show that AMPK regulates metabolic programs [@Hardie2012-xx]. As well, translation
+pathways may be increased because of disruption to the cell state (drug treatment), and 
+is a response to the increase in stress [@Mahe2024-xq].
+
+
 ## 5.2 Non-thresholded Gene Set Enrichment Analysis
 #### What method did you use? What genesets did you use? Make sure to specify versions and cite your methods.
+
+I perform non-thresholded GSEA with `fgsea`, a fast GSEA alternative that is
+run entirely in R. I chose this because it closely models after the original GSEA,
+providing the data necessary to create plots on the leading edge. The original
+GSEA is an industry standard, cited `57039` times. However,
+`fgsea` is much faster and much easier to use as it is not in a separate java 
+application.
+
+`fgsea` R package was run on version `1.34.2`.
+
 #### Summarize your enrichment results.
+
+The top ten up-regulated and down-regulated gene sets hold very clear patterns. 
+Seven of the top ten gene sets that were upregulated were related to protein synthesis. Obviously,
+these are all gene sets that are closely related, and one being enriched causes many of the others
+to be enriched as well. However, we also see amino acid deficiency and starvation pathways, 
+a related, but different idea.
+
+The down-regulated genes continue to have a lot to do with the cell cycle. Mitosis,
+cell cycle checkpoints, and DNA replication are all among the top ten. The most 
+enriched set with a negative NES related to E2F targets, however, E2F is a clear 
+actor in cell cycle, integrating cell cycle progression with DNA repair [@Ren2002-ts].
+
+
 #### How do these results compare to the results from the thresholded analysis in Assignment #2. Compare qualitatively. Is this a straight forward comparison? Why or why not?
+
+Interestingly, the difference between thresholded and non-thresholded gene set analysis
+does not hold too many differences. Qualitatively, the lowest p-value for up-regulated 
+gene sets from thresholded ORA was ~8.50e-12 and the lowest p-value for the down-regulated
+gene sets was 4.96e-53. This compares closely with that of fGSEA (6.1e-14, 9.4e-46 respectively).
+This displays the fact that mubritinib has clearer and stronger down-regulatory effects on the cell. 
+Both analyses come to this conclusion.
+
+Therefore, in terms of the down-regulated pathways and gene sets, these two analyses
+come to very similar conclusions. Cell cycle is being down-regulated. Mitosis, cell checkpoints, 
+DNA replication, etc. In both analyses, 10/10 of the top enriched pathways related 
+to the cell cycle (in ORA, we are looking at Reactome pathways). 
+
+The simplicity slightly deviates when looking at up-regulation. There is less clear
+of a signal on what is being up-regulated, and it shows. This is where the differences 
+in the analysis can shine. Since ORA only had 300 genes to work with, not as much depth
+of information could be processed. As we see in the gene ranks of the up-regulated 
+pathways (**Figure 1**), the genes in the leading edge are not as clustered to the front.
+These genes are what ORA would not pick up on. As a result, we see a whole class of 
+protein synthesis pathways being enriched for in fGSEA, that ORA did not pick up on.
+
+Despite this, we still see similar themes, of proteins synthesis, amino acids, and related 
+pathways. 
+
+I think this analysis is unique because of the clear biological signal. ORA loses
+information relative to GSEA, but the signal is still strong enough to provide clear results. 
+Ultimately, a less biologically clear RNA-seq dataset might find more differences between the two.
+
 
 ## 5.3 Visualize Gene Set Enrichment Analysis in Cytoscape
 #### Create an enrichment map - how many nodes and how many edges in the resulting map? What thresholds were used to create this map? Make sure to record all thresholds. Include a screenshot of your network prior to manual layout.
+
+The fgsea data was imported into the Cytoscape app [Shannon2003-su]. There were
+666 nodes and 5350 edges, with a node cutoff of 0.005 Q-value and a  0.375 edge similarity cutoff. 
+**Figure 3** shows the network before annotation and manual layout.
 #### Annotate your network - what parameters did you use to annotate the network. If you are using the default parameters make sure to list them as well.
+
+The network was then annotated using AutoAnnotate [@Kucera2016-qx], with quick start
+parameters of a central amount of clusters, labels from the pathways descriptions, and no 
+layout to minimize cluster overlap.
+
 #### Collapse your network to a theme network. What are the major themes present in this analysis? Do they fit with the model? Are there any novel pathways or themes?
+As evident in the figure, a lot of down-regulated gene set clusters ar econnected in one big network,
+and these all have to do with the cell cycle! This confirms that the trends we saw
+in the top pathways propogate throughout all enriched pathways.
+Interestingly, three up-regulated gene set clusters
+were connected: hormone stimulus, interleukin-6/4 pathway, and focal adhesion. These are
+related to growth / metabolism / extracellular matrix respectively. 
+
 #### Do the enrichment results support conclusions or mechanism discussed in the original paper? How do these results differ from the results you got from Assignment #2 thresholded methods
+
+One thing that GSEA can do that ORA cannot is validate the results of the paper. 
+They used GSEA figures in their paper (**Figure 6**). Comparing panel A in 
+**Figure 6** with **Figure 7**, panel C with **Figure 8**, and panel D with **Figure 9**,
+we see many small differences in the direct trajectory, the NES and the pvalue,
+but the general idea is the same. There is a clear and significant down-regulation
+that is replicated from the paper.
+
+
 #### Can you find evidence, i.e. publications, to support some of the results that you see. How does this evidence support your result?
+
+Second of all, the cell cycle is clearly being disrupted here. It is clear in the literature
+[@Shapiro1999-jg] that effective anti-cancer drugs target the cell cycle. Tumors are
+characterized by their increased rate of replication, reducing this disrupts the cancer's
+effectiveness and growth. Mubritinib is another example of this, a drug that inhibits
+the AMPK/p27 pathway, down-regulating the cell cycle, and controlling aggressive
+cancers. 
+
+However, third of all is understanding what is going on with the up-regulation.
+The main insight is that these are not actual mechanisms of mubritinib, but rather side
+effects of its main function which is downregulating the cell cycle. Since a cell is no
+longer working to divide, it instead focuses on metabolic activity and providing proteins necessary for growth.
+Papers show that AMPK regulates metabolic programs [@Hardie2012-xx]. As well, translation
+pathways may be increased because of disruption to the cell state (drug treatment), and 
+is a response to the increase in stress [@Mahe2024-xq].
 
 # 6. Referencs
 
