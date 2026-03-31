@@ -1,5 +1,7 @@
 # Caleb_Ji
-repo for bcb420 for Caleb Ji
+Repository for bcb420 for Caleb Ji.
+
+[Personal wiki](https://github.com/bcb420-2026/Caleb_Ji/wiki)
 
 A1 - [Webpage](https://bcb420-2026.github.io/Caleb_Ji/A1_Caleb.html)
 
